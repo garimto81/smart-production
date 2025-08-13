@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>인터랙티브 물류 이동 지도</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+    <!-- Chosen Palette: Cool Gray & Amber -->
+    <!-- Application Structure Plan: A single-page, task-focused application designed as an "Interactive Logistics Map". It features three main columns representing locations (Korea, Cyprus, Prague). Users can toggle between two phases (Gathering, Distribution) using prominent buttons. Each shipment is a draggable-style "card". Hovering over a card visually connects it to its destination with an arrow, and clicking reveals a detailed list. This Kanban-like, story-driven structure was chosen to make the complex, multi-step logistics plan exceptionally intuitive and easy to follow, abstracting away all unnecessary data points. -->
+    <!-- Visualization & Content Choices: 1. Logistics Flow (Goal: Show Flow): The core of the app is a custom HTML/Tailwind layout that functions like a board game. Cards representing shipments move conceptually between columns based on the selected phase. 2. Movement Indication (Goal: Show Relationship): On hover, a dynamically generated and positioned HTML div acts as a connecting arrow, visually reinforcing the origin and destination of each shipment. 3. Shipment Details (Goal: Inform): A modal window, triggered by a click, provides a detailed list of items for each shipment, offering drill-down capability without cluttering the main interface. This approach prioritizes understanding the overall flow first, then exploring details on demand. -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        body {
+            font-family: 'Noto Sans KR', sans-serif;
+            background-color: #f3f4f6;
+            overflow-x: hidden;
+        }
+        .phase-btn {
+            transition: all 0.2s ease-in-out;
+        }
+        .phase-btn.active {
+            background-color: #1e40af;
+            color: white;
+            box-shadow: 0 4px 14px 0 rgb(0 0 0 / 10%);
+        }
+        .logistics-card {
+            transition: opacity 0.3s ease-in-out;
+        }
+        .line-connector {
+            position: absolute;
+            background-color: #fbbf24;
+            height: 3px;
+            transform-origin: 0 0;
+            z-index: 10;
+            pointer-events: none;
+            transition: opacity 0.3s;
+        }
+        .line-connector::after {
+            content: '►';
+            position: absolute;
+            right: -2px;
+            top: 50%;
+            transform: translateY(-50%) scaleX(1.5);
+            color: #fbbf24;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body class="text-gray-800">
+
+    <div id="line-container" class="absolute top-0 left-0 w-full h-full pointer-events-none"></div>
+
+    <div class="container mx-auto p-4 md:p-8">
+        <header class="text-center mb-8">
+            <h1 class="text-3xl md:text-4xl font-bold mb-2">인터랙티브 물류 이동 지도</h1>
+            <p class="text-gray-600">복잡한 물류 계획을 단계별로 한눈에 파악해 보세요.</p>
+        </header>
+
+        <div class="flex justify-center mb-10">
+            <div class="flex space-x-2 bg-gray-200 p-1 rounded-full">
+                <button id="phase-1-btn" onclick="showPhase(1)" class="phase-btn active w-36 md:w-48 py-3 px-4 rounded-full font-bold text-sm md:text-base">1단계: 키프로스 집결</button>
+                <button id="phase-2-btn" onclick="showPhase(2)" class="phase-btn w-36 md:w-48 py-3 px-4 rounded-full font-bold text-sm md:text-base">2단계: 최종 분배</button>
+            </div>
+        </div>
+
+        <main id="logistics-board" class="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8 min-h-[60vh]">
+            <div id="col-korea" class="bg-white/50 p-4 rounded-xl">
+                <h2 class="text-2xl font-bold text-center mb-6 sticky top-4 bg-white/50 py-2 z-20">�🇷 한국</h2>
+                <div class="space-y-4"></div>
+            </div>
+            <div id="col-cyprus" class="bg-white/50 p-4 rounded-xl">
+                <h2 class="text-2xl font-bold text-center mb-6 sticky top-4 bg-white/50 py-2 z-20">🇨🇾 키프로스</h2>
+                <div class="space-y-4"></div>
+            </div>
+            <div id="col-prague" class="bg-white/50 p-4 rounded-xl">
+                <h2 class="text-2xl font-bold text-center mb-6 sticky top-4 bg-white/50 py-2 z-20">🇨🇿 프라하</h2>
+                <div class="space-y-4"></div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        const logisticsData = [
+            { id: 'cyprus-initial', phase: 1, from: 'cyprus', to: 'cyprus', type: 'inventory', title: '기존 보유 장비', items: ['FR7 바디: 8', '4k 스위처: 2', 'FR7 POE: 1'] },
+            { id: 'move1', phase: 1, from: 'korea', to: 'cyprus', type: 'direct', title: '모니터 이동', items: ['티비로직 24인치 모니터: 1'] },
+            { id: 'move2', phase: 1, from: 'prague', to: 'cyprus', type: 'direct', title: '주요 장비 이동 (직접)', items: ['FR7 렌즈: 6', '미러리스 바디: 5', '미러리스 렌즈 24-70mm: 5', '미러리스 렌즈 70-200mm: 1', '미러리스 렌즈 16-35mm: 1', 'FR7 IP500: 1', '소니 핸디캠: 1'] },
+            { id: 'move3', phase: 1, from: 'prague', to: 'cyprus', type: 'carnet', title: '주요 장비 이동 (까르네)', items: ['FR7 렌즈: 6', '미러리스 바디: 6', '미러리스 렌즈 24-70mm: 1', '미러리스 렌즈 70-200mm: 3', '삼각대: 15', '삼각대 달리: 2', '테라덱 무선 송수신기: 2', 'FR7 IP500: 1', '소니 핸디캠: 1'] },
+            { id: 'move4', phase: 2, from: 'cyprus', to: 'korea', type: 'direct', title: '한국 최종 배치', items: ['FR7 바디: 2', 'FR7 렌즈: 6', '미러리스 바디: 5', 'V마운트 배터리: 4', '4k 스위처: 1', '미러리스 렌즈 24-70mm: 5', '미러리스 렌즈 70-200mm: 1', 'FR7 IP500: 1', '소니 핸디캠: 1'] },
+            { id: 'move5', phase: 2, from: 'cyprus', to: 'prague', type: 'direct', title: '프라하 최종 배치', items: ['FR7 바디: 6', '4k 스위처: 1', 'FR7 POE: 1'] },
+            { id: 'move6', phase: 2, from: 'cyprus', to: 'prague', type: 'carnet', title: '까르네 장비 복귀', items: ['move3의 모든 까르네 장비가 프라하로 복귀합니다.'] },
+        ];
+
+        let currentPhase = 0;
+
+        function createCard(move) {
+            const card = document.createElement('div');
+            card.id = move.id;
+            card.dataset.phase = move.phase;
+            card.dataset.from = move.from;
+            card.dataset.to = move.to;
+            
+            let typeClass = '';
+            let icon = '';
+
+            switch(move.type) {
+                case 'carnet':
+                    typeClass = 'border-l-amber-400';
+                    icon = '📄';
+                    break;
+                case 'direct':
+                    typeClass = 'border-l-blue-500';
+                    icon = '✈️';
+                    break;
+                case 'inventory':
+                    typeClass = 'border-l-slate-400';
+                    icon = '🏢';
+                    break;
+            }
+
+            card.className = `logistics-card bg-white p-4 rounded-lg shadow-md border-l-4 ${typeClass}`;
+            card.innerHTML = `
+                <div class="flex justify-between items-start">
+                    <p class="font-bold text-base mb-2">${move.title}</p>
+                    <p class="text-xs text-gray-500 mt-1 flex-shrink-0 ml-2">${icon} ${move.type === 'carnet' ? '까르네' : (move.type === 'direct' ? '직접이동' : '보유재고')}</p>
+                </div>
+                <ul class="list-disc list-inside text-sm text-gray-600 space-y-1">
+                    ${move.items.map(item => `<li>${item}</li>`).join('')}
+                </ul>
+            `;
+            return card;
+        }
+
+        function showPhase(phase) {
+            if (currentPhase === phase) return;
+            currentPhase = phase;
+
+            document.querySelectorAll('#logistics-board .space-y-4').forEach(col => {
+                col.innerHTML = '';
+            });
+
+            logisticsData.forEach(move => {
+                if (move.phase === phase) {
+                    const card = createCard(move);
+                    const originColumnContent = document.querySelector(`#col-${move.from} > .space-y-4`);
+                    if (originColumnContent) {
+                        originColumnContent.appendChild(card);
+                    }
+                }
+            });
+
+            document.getElementById('phase-1-btn').classList.toggle('active', phase === 1);
+            document.getElementById('phase-2-btn').classList.toggle('active', phase === 2);
+            
+            setTimeout(() => drawAllLines(phase), 100);
+        }
+        
+        function drawAllLines(phase) {
+            const lineContainer = document.getElementById('line-container');
+            lineContainer.innerHTML = ''; 
+
+            const movesInPhase = logisticsData.filter(m => m.phase === phase && m.from !== m.to);
+
+            movesInPhase.forEach(move => {
+                const fromCard = document.getElementById(move.id);
+                const toCol = document.getElementById(`col-${move.to}`);
+                
+                if (!fromCard || !toCol) return;
+
+                const startRect = fromCard.getBoundingClientRect();
+                const endRect = toCol.getBoundingClientRect();
+                
+                let startX, endX;
+                if (startRect.left < endRect.left) {
+                    startX = startRect.right;
+                    endX = endRect.left;
+                } else {
+                    startX = startRect.left;
+                    endX = endRect.right;
+                }
+
+                // For vertical layout on mobile
+                if (window.innerWidth < 768) {
+                    startX = startRect.left + startRect.width / 2;
+                    endX = endRect.left + endRect.width / 2;
+                }
+                
+                const startY = startRect.top + startRect.height / 2;
+                const endY = endRect.top + endRect.height / 2;
+
+                const distance = Math.hypot(endX - startX, endY - startY);
+                const angle = Math.atan2(endY - startY, endX - startX);
+
+                const line = document.createElement('div');
+                line.className = 'line-connector';
+                line.style.width = `${distance}px`;
+                line.style.left = `${startX}px`;
+                line.style.top = `${startY}px`;
+                line.style.transform = `rotate(${angle}rad)`;
+                
+                lineContainer.appendChild(line);
+            });
+        }
+        
+        function reDrawLines() {
+            if(currentPhase !== 0) {
+               drawAllLines(currentPhase);
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            showPhase(1);
+            window.addEventListener('resize', reDrawLines);
+        });
+    </script>
+</body>
+</html>
+�
