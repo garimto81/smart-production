@@ -3,28 +3,34 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>인터랙티브 물류 이동 지도</title>
+    <title>인터랙티브 물류 이동 지도 (타임라인 버전)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
-    <!-- Chosen Palette: Cool Gray & Amber -->
-    <!-- Application Structure Plan: A single-page, task-focused application designed as an "Interactive Logistics Map". It features three main columns representing locations (Korea, Cyprus, Prague). Users can toggle between two phases (Gathering, Distribution) using prominent buttons. Each shipment is a draggable-style "card". Hovering over a card visually connects it to its destination with an arrow, and clicking reveals a detailed list. This Kanban-like, story-driven structure was chosen to make the complex, multi-step logistics plan exceptionally intuitive and easy to follow, abstracting away all unnecessary data points. -->
-    <!-- Visualization & Content Choices: 1. Logistics Flow (Goal: Show Flow): The core of the app is a custom HTML/Tailwind layout that functions like a board game. Cards representing shipments move conceptually between columns based on the selected phase. 2. Movement Indication (Goal: Show Relationship): On hover, a dynamically generated and positioned HTML div acts as a connecting arrow, visually reinforcing the origin and destination of each shipment. 3. Shipment Details (Goal: Inform): A modal window, triggered by a click, provides a detailed list of items for each shipment, offering drill-down capability without cluttering the main interface. This approach prioritizes understanding the overall flow first, then exploring details on demand. -->
-    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
     <style>
         body {
             font-family: 'Noto Sans KR', sans-serif;
             background-color: #f3f4f6;
             overflow-x: hidden;
         }
-        .phase-btn {
+        .step {
             transition: all 0.2s ease-in-out;
+            cursor: pointer;
         }
-        .phase-btn.active {
+        .step.active .step-circle {
             background-color: #1e40af;
             color: white;
-            box-shadow: 0 4px 14px 0 rgb(0 0 0 / 10%);
+            transform: scale(1.1);
+        }
+        .step.active .step-label {
+            color: #1e40af;
+            font-weight: 700;
+        }
+        .step-line {
+            height: 2px;
+            background-color: #d1d5db;
+            flex-grow: 1;
         }
         .logistics-card {
             transition: opacity 0.3s ease-in-out;
@@ -47,146 +53,371 @@
             color: #fbbf24;
             font-size: 14px;
         }
+        .highlight-item {
+            background-color: #fef3c7;
+            font-weight: 700;
+            color: #92400e;
+            border-radius: 0.25rem;
+            margin: -2px -6px;
+            padding: 2px 6px;
+            display: inline-block;
+            width: calc(100% + 12px);
+        }
     </style>
 </head>
 <body class="text-gray-800">
 
-    <div id="line-container" class="absolute top-0 left-0 w-full h-full pointer-events-none"></div>
+    <div id="line-container" class="absolute top-0 left-0 w-full h-full pointer-events-none hidden md:block"></div>
 
     <div class="container mx-auto p-4 md:p-8">
         <header class="text-center mb-8">
-            <h1 class="text-3xl md:text-4xl font-bold mb-2">인터랙티브 물류 이동 지도</h1>
-            <p class="text-gray-600">복잡한 물류 계획을 단계별로 한눈에 파악해 보세요.</p>
+            <h1 class="text-3xl md:text-4xl font-bold mb-2">인터랙티브 물류 타임라인</h1>
+            <p class="text-gray-600">단계별 재고 현황과 이동 경로를 한눈에 파악해 보세요.</p>
         </header>
 
-        <div class="flex justify-center mb-10">
-            <div class="flex space-x-2 bg-gray-200 p-1 rounded-full">
-                <button id="phase-1-btn" onclick="showPhase(1)" class="phase-btn active w-36 md:w-48 py-3 px-4 rounded-full font-bold text-sm md:text-base">1단계: 키프로스 집결</button>
-                <button id="phase-2-btn" onclick="showPhase(2)" class="phase-btn w-36 md:w-48 py-3 px-4 rounded-full font-bold text-sm md:text-base">2단계: 최종 분배</button>
+        <!-- Stepper -->
+        <div class="flex items-center justify-center mb-10 w-full max-w-4xl mx-auto">
+            <div id="step-0" class="step active text-center" onclick="showStep(0)">
+                <div class="step-circle w-10 h-10 mx-auto bg-white rounded-full flex items-center justify-center font-bold text-lg border-2 border-gray-300">0</div>
+                <p class="step-label text-xs mt-2">초기 상태</p>
+            </div>
+            <div class="step-line"></div>
+            <div id="step-1" class="step text-center" onclick="showStep(1)">
+                <div class="step-circle w-8 h-8 mx-auto bg-white rounded-full flex items-center justify-center font-bold border-2 border-gray-300">→</div>
+                <p class="step-label text-xs mt-2">1단계 이동</p>
+            </div>
+            <div class="step-line"></div>
+            <div id="step-2" class="step text-center" onclick="showStep(2)">
+                <div class="step-circle w-10 h-10 mx-auto bg-white rounded-full flex items-center justify-center font-bold text-lg border-2 border-gray-300">1</div>
+                <p class="step-label text-xs mt-2">1단계 완료</p>
+            </div>
+            <div class="step-line"></div>
+            <div id="step-3" class="step text-center" onclick="showStep(3)">
+                <div class="step-circle w-8 h-8 mx-auto bg-white rounded-full flex items-center justify-center font-bold border-2 border-gray-300">→</div>
+                <p class="step-label text-xs mt-2">2단계 이동</p>
+            </div>
+            <div class="step-line"></div>
+            <div id="step-4" class="step text-center" onclick="showStep(4)">
+                <div class="step-circle w-10 h-10 mx-auto bg-white rounded-full flex items-center justify-center font-bold text-lg border-2 border-gray-300">2</div>
+                <p class="step-label text-xs mt-2">최종 상태</p>
             </div>
         </div>
 
-        <main id="logistics-board" class="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8 min-h-[60vh]">
-            <div id="col-korea" class="bg-white/50 p-4 rounded-xl">
-                <h2 class="text-2xl font-bold text-center mb-6 sticky top-4 bg-white/50 py-2 z-20">�🇷 한국</h2>
-                <div class="space-y-4"></div>
-            </div>
-            <div id="col-cyprus" class="bg-white/50 p-4 rounded-xl">
-                <h2 class="text-2xl font-bold text-center mb-6 sticky top-4 bg-white/50 py-2 z-20">🇨🇾 키프로스</h2>
-                <div class="space-y-4"></div>
-            </div>
-            <div id="col-prague" class="bg-white/50 p-4 rounded-xl">
-                <h2 class="text-2xl font-bold text-center mb-6 sticky top-4 bg-white/50 py-2 z-20">🇨🇿 프라하</h2>
-                <div class="space-y-4"></div>
-            </div>
+        <!-- Desktop View -->
+        <main id="logistics-board" class="hidden md:grid grid-cols-3 gap-6 md:gap-8 min-h-[60vh]">
+            <div id="col-korea" class="bg-white/50 p-4 rounded-xl"><h2 class="text-2xl font-bold text-center mb-6 sticky top-4 bg-white/50 py-2 z-20">🇰🇷 한국</h2><div class="space-y-4"></div></div>
+            <div id="col-cyprus" class="bg-white/50 p-4 rounded-xl"><h2 class="text-2xl font-bold text-center mb-6 sticky top-4 bg-white/50 py-2 z-20">🇨🇾 키프로스</h2><div class="space-y-4"></div></div>
+            <div id="col-prague" class="bg-white/50 p-4 rounded-xl"><h2 class="text-2xl font-bold text-center mb-6 sticky top-4 bg-white/50 py-2 z-20">🇨🇿 프라하</h2><div class="space-y-4"></div></div>
         </main>
+
+        <!-- Mobile View -->
+        <div id="mobile-logistics-view" class="md:hidden space-y-4"></div>
     </div>
 
     <script>
-        const logisticsData = [
-            { id: 'cyprus-initial', phase: 1, from: 'cyprus', to: 'cyprus', type: 'inventory', title: '기존 보유 장비', items: ['FR7 바디: 8', '4k 스위처: 2', 'FR7 POE: 1'] },
-            { id: 'move1', phase: 1, from: 'korea', to: 'cyprus', type: 'direct', title: '모니터 이동', items: ['티비로직 24인치 모니터: 1'] },
-            { id: 'move2', phase: 1, from: 'prague', to: 'cyprus', type: 'direct', title: '주요 장비 이동 (직접)', items: ['FR7 렌즈: 6', '미러리스 바디: 5', '미러리스 렌즈 24-70mm: 5', '미러리스 렌즈 70-200mm: 1', '미러리스 렌즈 16-35mm: 1', 'FR7 IP500: 1', '소니 핸디캠: 1'] },
-            { id: 'move3', phase: 1, from: 'prague', to: 'cyprus', type: 'carnet', title: '주요 장비 이동 (까르네)', items: ['FR7 렌즈: 6', '미러리스 바디: 6', '미러리스 렌즈 24-70mm: 1', '미러리스 렌즈 70-200mm: 3', '삼각대: 15', '삼각대 달리: 2', '테라덱 무선 송수신기: 2', 'FR7 IP500: 1', '소니 핸디캠: 1'] },
-            { id: 'move4', phase: 2, from: 'cyprus', to: 'korea', type: 'direct', title: '한국 최종 배치', items: ['FR7 바디: 2', 'FR7 렌즈: 6', '미러리스 바디: 5', 'V마운트 배터리: 4', '4k 스위처: 1', '미러리스 렌즈 24-70mm: 5', '미러리스 렌즈 70-200mm: 1', 'FR7 IP500: 1', '소니 핸디캠: 1'] },
-            { id: 'move5', phase: 2, from: 'cyprus', to: 'prague', type: 'direct', title: '프라하 최종 배치', items: ['FR7 바디: 6', '4k 스위처: 1', 'FR7 POE: 1'] },
-            { id: 'move6', phase: 2, from: 'cyprus', to: 'prague', type: 'carnet', title: '까르네 장비 복귀', items: ['move3의 모든 까르네 장비가 프라하로 복귀합니다.'] },
+        const initialInventoryData = [
+            // 한국
+            { location: 'korea', name: 'V마운트 배터리', qty: 4 }, { location: 'korea', name: '테라덱 무선 송수신기', qty: 4 }, { location: 'korea', name: 'FR7 컨트롤러 IP500', qty: 1 }, { location: 'korea', name: 'FR7 바디', qty: 10 }, { location: 'korea', name: 'FR7 렌즈', qty: 6 }, { location: 'korea', name: '미러리스 바디', qty: 6 }, { location: 'korea', name: '미러리스 렌즈 70-200mm', qty: 6 }, { location: 'korea', name: '삼각대', qty: 18 }, { location: 'korea', name: '삼각대 달리', qty: 4 }, { location: 'korea', name: '8k 스위처', qty: 1 }, { location: 'korea', name: 'FR7 POE', qty: 1 }, { location: 'korea', name: '티비로직 24인치 모니터', qty: 2 }, { location: 'korea', name: '티비로직 17인치 모니터', qty: 1 }, { location: 'korea', name: '소니 핸디캠', qty: 1 }, { location: 'korea', name: '드론', qty: 1 },
+            // 키프로스
+            { location: 'cyprus', name: 'FR7 바디', qty: 8 }, { location: 'cyprus', name: '4k 스위처', qty: 2 }, { location: 'cyprus', name: 'FR7 POE', qty: 1 }, { location: 'cyprus', name: 'V마운트 배터리', qty: 8 },
+            // 프라하
+            { location: 'prague', name: '짐벌', qty: 1 }, { location: 'prague', name: '소니 핸디캠', qty: 2 }, { location: 'prague', name: 'FR7 렌즈', qty: 12 }, { location: 'prague', name: '미러리스 바디', qty: 11 }, { location: 'prague', name: '미러리스 렌즈 24-70mm', qty: 6 }, { location: 'prague', name: '미러리스 렌즈 70-200mm', qty: 4 }, { location: 'prague', name: '미러리스 렌즈 16-35mm', qty: 1 }, { location: 'prague', name: '삼각대', qty: 15 }, { location: 'prague', name: '삼각대 달리', qty: 2 }, { location: 'prague', name: '테라덱 무선 송수신기', qty: 2 }, { location: 'prague', name: 'FR7 IP500', qty: 2 }
         ];
 
-        let currentPhase = 0;
-
-        function createCard(move) {
-            const card = document.createElement('div');
-            card.id = move.id;
-            card.dataset.phase = move.phase;
-            card.dataset.from = move.from;
-            card.dataset.to = move.to;
+        const moves = [
+            // Phase 1 Moves: Gather in Cyprus
+            { id: 'move1', phase: 1, from: 'korea', to: 'cyprus', type: 'direct', title: '한국 → 키프로스', items: [{ name: '티비로직 24인치 모니터', qty: 1 }, { name: '테라덱 무선 송수신기', qty: 2 }] },
+            { id: 'move2', phase: 1, from: 'prague', to: 'cyprus', type: 'direct', title: '프라하 → 키프로스 (직접)', items: [
+                { name: '미러리스 바디', qty: 5 }, { name: '미러리스 렌즈 24-70mm', qty: 5 }, { name: '미러리스 렌즈 70-200mm', qty: 1 }, { name: 'FR7 IP500', qty: 1 }, { name: '소니 핸디캠', qty: 1 }, { name: '테라덱 무선 송수신기', qty: 2 }
+            ]},
+            { id: 'move3', phase: 1, from: 'prague', to: 'cyprus', type: 'carnet', title: '프라하 → 키프로스 (까르네/유동)', items: [
+                { name: '짐벌', qty: 1 }, { name: '소니 핸디캠', qty: 1 }, { name: 'FR7 렌즈', qty: 12 }, { name: '미러리스 바디', qty: 6 }, { name: '미러리스 렌즈 24-70mm', qty: 1 }, { name: '미러리스 렌즈 70-200mm', qty: 3 }, { name: '미러리스 렌즈 16-35mm', qty: 1 }, { name: '삼각대', qty: 15 }, { name: '삼각대 달리', qty: 2 }, { name: 'FR7 IP500', qty: 1 }
+            ]},
             
-            let typeClass = '';
-            let icon = '';
+            // Phase 2 Moves: Distribute to final locations
+            { id: 'move4', phase: 2, from: 'cyprus', to: 'korea', type: 'direct', title: '→ 한국 최종 배치', items: [
+                { name: 'FR7 바디', qty: 2 }, { name: 'FR7 렌즈', qty: 6 }, { name: '미러리스 바디', qty: 5 }, { name: '미러리스 렌즈 24-70mm', qty: 5 }, { name: '미러리스 렌즈 70-200mm', qty: 1 }, { name: '4k 스위처', qty: 1 }, { name: 'FR7 IP500', qty: 1 }, { name: '소니 핸디캠', qty: 1 }, { name: 'V마운트 배터리', qty: 4 }, { name: '짐벌', qty: 1 }, { name: '테라덱 무선 송수신기', qty: 4 }
+            ]},
+            { id: 'move5', phase: 2, from: 'cyprus', to: 'prague', type: 'direct', title: '→ 프라하 최종 배치', items: [
+                { name: 'FR7 바디', qty: 6 }, { name: '4k 스위처', qty: 1 }, { name: 'FR7 POE', qty: 1 }, { name: '티비로직 24인치 모니터', qty: 1 }, { name: 'V마운트 배터리', qty: 4 }
+            ]},
+            { id: 'move6', phase: 2, from: 'cyprus', to: 'prague', type: 'carnet', title: '→ 프라하 최종 배치', items: [
+                { name: '소니 핸디캠', qty: 1 }, { name: 'FR7 렌즈', qty: 12 }, { name: '미러리스 바디', qty: 6 }, { name: '미러리스 렌즈 24-70mm', qty: 1 }, { name: '미러리스 렌즈 70-200mm', qty: 3 }, { name: '미러리스 렌즈 16-35mm', qty: 1 }, { name: '삼각대', qty: 15 }, { name: '삼각대 달리', qty: 2 }, { name: 'FR7 IP500', qty: 1 }
+            ]}
+        ];
 
-            switch(move.type) {
-                case 'carnet':
-                    typeClass = 'border-l-amber-400';
-                    icon = '📄';
-                    break;
-                case 'direct':
-                    typeClass = 'border-l-blue-500';
-                    icon = '✈️';
-                    break;
-                case 'inventory':
-                    typeClass = 'border-l-slate-400';
-                    icon = '🏢';
-                    break;
+        let currentStep = 0;
+        const locationMap = { 'korea': '🇰🇷 한국', 'cyprus': '🇨🇾 키프로스', 'prague': '🇨🇿 프라하' };
+        
+        const inventories = {};
+
+        function calculateInventories() {
+            inventories[0] = { korea: {}, cyprus: {}, prague: {} };
+            initialInventoryData.forEach(item => {
+                inventories[0][item.location][item.name] = (inventories[0][item.location][item.name] || 0) + item.qty;
+            });
+
+            const phase1Moves = moves.filter(m => m.phase === 1);
+            inventories[1] = calculateNextState(inventories[0], phase1Moves);
+
+            const phase2Moves = moves.filter(m => m.phase === 2);
+            inventories[2] = calculateNextState(inventories[1], phase2Moves);
+        }
+
+        function calculateNextState(prevState, currentMoves) {
+            const nextState = JSON.parse(JSON.stringify(prevState)); 
+            currentMoves.forEach(move => {
+                move.items.forEach(item => {
+                    if (nextState[move.from] && nextState[move.from][item.name]) {
+                        nextState[move.from][item.name] -= item.qty;
+                        if (nextState[move.from][item.name] <= 0) {
+                            delete nextState[move.from][item.name];
+                        }
+                    }
+                    nextState[move.to] = nextState[move.to] || {};
+                    nextState[move.to][item.name] = (nextState[move.to][item.name] || 0) + item.qty;
+                });
+            });
+            return nextState;
+        }
+
+        function createCard(data, isMobile = false, movedItemsMap = new Map()) {
+            const card = document.createElement('div');
+            
+            if (data.type) { // It's a move card
+                card.id = data.id;
+                let typeClass = data.type === 'carnet' ? 'border-l-amber-400' : 'border-l-blue-500';
+                let icon = data.type === 'carnet' ? '📄' : '✈️';
+                let typeText = data.type === 'carnet' ? '까르네' : '직접이동';
+                card.className = `logistics-card bg-white p-4 rounded-lg shadow-xl border-l-4 ${typeClass} relative z-10`;
+                let pathHtml = isMobile ? `<p class="font-bold text-gray-700 mb-2">${locationMap[data.from]} → ${locationMap[data.to]}</p>` : '';
+                card.innerHTML = `
+                    <div class="flex justify-between items-start"><p class="font-bold text-base mb-2">${data.title}</p><p class="text-xs text-gray-500 mt-1 flex-shrink-0 ml-2">${icon} ${typeText}</p></div>
+                    ${pathHtml}
+                    <ul class="list-disc list-inside text-sm text-gray-600 space-y-1">${data.items.map(item => `<li>${item.name}: ${item.qty}</li>`).join('')}</ul>`;
+            } else { // It's an inventory card
+                card.className = 'logistics-card bg-white p-4 rounded-lg shadow-md border-l-4 border-l-slate-400';
+                const itemsList = Object.keys(data).length > 0 
+                    ? Object.entries(data).sort((a, b) => a[0].localeCompare(b[0])).map(([name, qty]) => {
+                        const movedQty = movedItemsMap.get(name);
+                        let content;
+                        if (movedQty > 0) {
+                            const remainingQty = qty - movedQty;
+                            content = `<span class="highlight-item">${name}: ${qty} → ${remainingQty}</span>`;
+                        } else {
+                            content = `${name}: ${qty}`;
+                        }
+                        return `<li>${content}</li>`;
+                    }).join('') 
+                    : '';
+                card.innerHTML = `<ul class="list-disc list-inside text-sm text-gray-600 space-y-1">${itemsList}</ul>`;
             }
-
-            card.className = `logistics-card bg-white p-4 rounded-lg shadow-md border-l-4 ${typeClass}`;
-            card.innerHTML = `
-                <div class="flex justify-between items-start">
-                    <p class="font-bold text-base mb-2">${move.title}</p>
-                    <p class="text-xs text-gray-500 mt-1 flex-shrink-0 ml-2">${icon} ${move.type === 'carnet' ? '까르네' : (move.type === 'direct' ? '직접이동' : '보유재고')}</p>
-                </div>
-                <ul class="list-disc list-inside text-sm text-gray-600 space-y-1">
-                    ${move.items.map(item => `<li>${item}</li>`).join('')}
-                </ul>
-            `;
             return card;
         }
 
-        function showPhase(phase) {
-            if (currentPhase === phase) return;
-            currentPhase = phase;
+        function renderDesktopView(step) {
+            document.querySelectorAll('#logistics-board .space-y-4').forEach(col => col.innerHTML = '');
+            document.getElementById('line-container').innerHTML = '';
 
-            document.querySelectorAll('#logistics-board .space-y-4').forEach(col => {
-                col.innerHTML = '';
-            });
-
-            logisticsData.forEach(move => {
-                if (move.phase === phase) {
-                    const card = createCard(move);
-                    const originColumnContent = document.querySelector(`#col-${move.from} > .space-y-4`);
-                    if (originColumnContent) {
-                        originColumnContent.appendChild(card);
+            if (step % 2 === 0) { // State view (0, 2, 4)
+                const inventory = inventories[step / 2];
+                Object.keys(inventory).forEach(loc => {
+                    if (step === 4 && loc === 'cyprus') return;
+                    
+                    let inventoryToDisplay = inventory[loc];
+                    if (step === 4 && loc === 'korea') {
+                        inventoryToDisplay = filterFloatingInventory(inventory[loc])[0];
                     }
+
+                    const card = createCard(inventoryToDisplay);
+                    if(card.querySelector('li')) {
+                        document.querySelector(`#col-${loc} > .space-y-4`).appendChild(card);
+                    }
+                });
+                if(step === 4) addFinalSummaries();
+
+            } else { // Movement view (1, 3)
+                const phase = Math.ceil(step / 2);
+                const prevInventory = inventories[phase - 1];
+                const phaseMoves = moves.filter(m => m.phase === phase);
+                
+                Object.keys(prevInventory).forEach(loc => {
+                    if ((phase === 1 && loc === 'prague') || (phase === 2 && loc === 'cyprus')) {
+                         // Don't show background card if location is being emptied
+                    } else {
+                        const movedItemsFromLoc = new Map();
+                        phaseMoves.filter(m => m.from === loc).forEach(move => {
+                            move.items.forEach(item => {
+                                movedItemsFromLoc.set(item.name, (movedItemsFromLoc.get(item.name) || 0) + item.qty);
+                            });
+                        });
+                        const card = createCard(prevInventory[loc], false, movedItemsFromLoc);
+                        if(card.querySelector('li')) {
+                            card.classList.add('opacity-50');
+                            document.querySelector(`#col-${loc} > .space-y-4`).appendChild(card);
+                        }
+                    }
+                });
+
+                phaseMoves.forEach(move => {
+                    const card = createCard(move);
+                    document.querySelector(`#col-${move.from} > .space-y-4`).appendChild(card);
+                });
+                setTimeout(() => drawAllLines(phase), 100);
+            }
+        }
+
+        function renderMobileView(step) {
+            const mobileContainer = document.getElementById('mobile-logistics-view');
+            mobileContainer.innerHTML = '';
+            if (step % 2 === 0) { // State view
+                const inventory = inventories[step / 2];
+                Object.keys(inventory).forEach(loc => {
+                    if (step === 4 && loc === 'cyprus') return;
+                    let inventoryToDisplay = inventory[loc];
+                    let floatingInventory = {};
+                    if (step === 4 && loc === 'korea') {
+                        [inventoryToDisplay, floatingInventory] = filterFloatingInventory(inventory[loc]);
+                    }
+
+                    const wrapper = document.createElement('div');
+                    wrapper.innerHTML = `<h3 class="text-xl font-bold mb-2">${locationMap[loc]}</h3>`;
+                    const card = createCard(inventoryToDisplay);
+                    if(card.querySelector('li')) {
+                        wrapper.appendChild(card);
+                        mobileContainer.appendChild(wrapper);
+                    }
+                     if (step === 4 && loc === 'korea' && Object.keys(floatingInventory).length > 0) {
+                        const floatingCard = createFloatingInventoryCard(floatingInventory);
+                        wrapper.appendChild(floatingCard);
+                    }
+                });
+                if(step === 4) addFinalSummaries(true);
+            } else { // Movement view
+                const phase = Math.ceil(step / 2);
+                const phaseMoves = moves.filter(m => m.phase === phase);
+                phaseMoves.forEach(move => {
+                    const card = createCard(move, true);
+                    mobileContainer.appendChild(card);
+                });
+            }
+        }
+
+        function createSetBreakdownCard() {
+            const breakdown = [
+                'FR7 바디 / 렌즈: 6', '미러리스 바디: 3', '미러리스 렌즈 24-70mm: 1', '미러리스 렌즈 70-200mm: 2',
+                '삼각대: 8', '소니 핸디캠: 1', 'FR7 POE: 1', '스위처: 1', '테라덱 무선 송수신기: 2set'
+            ];
+            const card = document.createElement('div');
+            card.className = 'mt-2 p-3 bg-slate-100 border-t-2 border-slate-200 rounded-b-lg text-left';
+            card.innerHTML = `<p class="text-xs font-bold text-slate-600 mb-1">[참고] 1세트 구성품</p>
+                              <ul class="grid grid-cols-1 gap-x-4 text-xs text-slate-500">
+                                ${breakdown.map(item => `<li>- ${item}</li>`).join('')}
+                              </ul>`;
+            return card;
+        }
+
+        function filterFloatingInventory(inventory) {
+            const floatingItemsList = ['짐벌', '드론'];
+            const mainInventory = {};
+            const floatingInventory = {};
+
+            for (const item in inventory) {
+                if (floatingItemsList.includes(item)) {
+                    floatingInventory[item] = inventory[item];
+                } else if (item === '테라덱 무선 송수신기') {
+                    const totalQty = inventory[item];
+                    if (totalQty > 2) {
+                        mainInventory[item] = 2; // Fixed part
+                        floatingInventory[item] = totalQty - 2; // Floating part
+                    } else {
+                        mainInventory[item] = totalQty;
+                    }
+                } else {
+                    mainInventory[item] = inventory[item];
+                }
+            }
+            return [mainInventory, floatingInventory];
+        }
+
+        function createFloatingInventoryCard(floatingInventory) {
+             const card = document.createElement('div');
+             card.className = 'mt-4 p-4 bg-purple-100 text-purple-800 rounded-lg';
+             card.innerHTML = `<p class="font-bold text-center mb-2">📦 유동 물량</p>
+                               <ul class="list-disc list-inside text-sm">${Object.entries(floatingInventory).map(([name, qty]) => `<li>${name}: ${qty}</li>`).join('')}</ul>`;
+            return card;
+        }
+
+        function addFinalSummaries(isMobile = false) {
+            const summaries = [
+                { loc: 'korea', text: '포커 테이블 2 Set' },
+                { loc: 'prague', text: '포커 테이블 1 Set' }
+            ];
+            
+            // Floating inventory for Korea
+            const [_, floatingInventory] = filterFloatingInventory(inventories[2].korea);
+            if (Object.keys(floatingInventory).length > 0) {
+                const floatingCard = createFloatingInventoryCard(floatingInventory);
+                if (isMobile) {
+                    const parent = Array.from(document.querySelector('#mobile-logistics-view').children).find(child => child.querySelector('h3')?.textContent.includes(locationMap['korea']));
+                    if(parent) parent.appendChild(floatingCard);
+                } else {
+                    document.querySelector(`#col-korea > .space-y-4`).appendChild(floatingCard);
+                }
+            }
+
+            summaries.forEach(s => {
+                const summaryEl = document.createElement('div');
+                summaryEl.className = 'mt-4 p-4 bg-blue-100 text-blue-800 rounded-lg text-center font-bold flex items-center justify-center gap-2';
+                summaryEl.innerHTML = `<span>🃏</span><span>${s.text}</span>`;
+                
+                if (s.loc === 'korea') {
+                    const breakdownCard = createSetBreakdownCard();
+                    summaryEl.appendChild(breakdownCard);
+                    summaryEl.classList.remove('items-center');
+                    summaryEl.classList.add('flex-col');
+                }
+
+                if (isMobile) {
+                   const parent = Array.from(document.querySelector('#mobile-logistics-view').children).find(child => child.querySelector('h3')?.textContent.includes(locationMap[s.loc]));
+                   if(parent) parent.appendChild(summaryEl);
+                } else {
+                    document.querySelector(`#col-${s.loc} > .space-y-4`).appendChild(summaryEl);
                 }
             });
+        }
 
-            document.getElementById('phase-1-btn').classList.toggle('active', phase === 1);
-            document.getElementById('phase-2-btn').classList.toggle('active', phase === 2);
-            
-            setTimeout(() => drawAllLines(phase), 100);
+
+        function showStep(step) {
+            if (currentStep === step && step !== 0) return;
+            currentStep = step;
+
+            if (window.innerWidth < 768) {
+                renderMobileView(step);
+            } else {
+                renderDesktopView(step);
+            }
+
+            document.querySelectorAll('.step').forEach((el, i) => {
+                el.classList.toggle('active', i === step);
+            });
         }
         
         function drawAllLines(phase) {
             const lineContainer = document.getElementById('line-container');
+            if (!lineContainer) return;
             lineContainer.innerHTML = ''; 
 
-            const movesInPhase = logisticsData.filter(m => m.phase === phase && m.from !== m.to);
-
+            const movesInPhase = moves.filter(m => m.phase === phase);
             movesInPhase.forEach(move => {
                 const fromCard = document.getElementById(move.id);
                 const toCol = document.getElementById(`col-${move.to}`);
-                
-                if (!fromCard || !toCol) return;
+                if (!fromCard || !toCol || move.from === move.to) return;
 
                 const startRect = fromCard.getBoundingClientRect();
                 const endRect = toCol.getBoundingClientRect();
-                
-                let startX, endX;
-                if (startRect.left < endRect.left) {
-                    startX = startRect.right;
-                    endX = endRect.left;
-                } else {
-                    startX = startRect.left;
-                    endX = endRect.right;
-                }
-
-                // For vertical layout on mobile
-                if (window.innerWidth < 768) {
-                    startX = startRect.left + startRect.width / 2;
-                    endX = endRect.left + endRect.width / 2;
-                }
-                
+                let startX = (startRect.left < endRect.left) ? startRect.right : startRect.left;
+                let endX = (startRect.left < endRect.left) ? endRect.left : endRect.right;
                 const startY = startRect.top + startRect.height / 2;
                 const endY = endRect.top + endRect.height / 2;
 
@@ -199,22 +430,19 @@
                 line.style.left = `${startX}px`;
                 line.style.top = `${startY}px`;
                 line.style.transform = `rotate(${angle}rad)`;
-                
                 lineContainer.appendChild(line);
             });
         }
         
-        function reDrawLines() {
-            if(currentPhase !== 0) {
-               drawAllLines(currentPhase);
-            }
+        function handleResize() {
+            showStep(currentStep);
         }
 
         document.addEventListener('DOMContentLoaded', () => {
-            showPhase(1);
-            window.addEventListener('resize', reDrawLines);
+            calculateInventories();
+            showStep(0);
+            window.addEventListener('resize', handleResize);
         });
     </script>
 </body>
 </html>
-�
